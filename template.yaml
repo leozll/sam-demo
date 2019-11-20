@@ -1,0 +1,199 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  NewPostFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: "sam-new-post-z"
+      CodeUri: new_post/
+      Handler: app.lambda_handler
+      Role: !GetAtt LambdaServiceRole.Arn
+      Runtime: python2.7
+      Policies: AmazonDynamoDBFullAccess
+      Events:
+        HttpPostFuncMine:
+          Type: Api
+          Properties:
+            Path: /
+            Method: post
+      Environment:
+        Variables:
+          DB_TABLE_NAME: !Ref DynamoDBTable
+          SNS_TOPIC: !Ref SNSTopic
+
+  GetPostFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: "sam-get-post-z"
+      CodeUri: get_post/
+      Handler: app.lambda_handler
+      Role: !GetAtt LambdaServiceRole.Arn
+      Runtime: python2.7
+      Policies: AmazonDynamoDBFullAccess
+      Events: 
+        HttpGetFuncMine:
+          Type: Api
+          Properties:
+            Path: /
+            Method: get
+#      Integration: #  CORS
+#        ResponseParameters:
+#          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+#          gatewayresponse.header.Access-Control-Allow-Headers: "'*'"
+      Environment:
+        Variables:
+          DB_TABLE_NAME: !Ref DynamoDBTable
+
+
+#  NewGetApi:
+#    Type: 'AWS::ApiGateway::RestApi'
+#    Properties:
+#      Body:
+#        basePath: /
+#        Method: post
+#        schemes:
+#            - https
+#      Description: New Get API
+#      Name: NewGetApi
+#
+#  GetPostApi:
+#    Type: 'AWS::ApiGateway::RestApi'
+#    Properties:
+#      Body:
+#        basePath : /
+#        Method: get
+#        schemes :
+#            - https
+#      Description: Get Post API
+#      Name: GetPostApi
+#
+#  GetPostFunctionMethod:
+#    Type: "AWS::ApiGateway::Method"
+#    Properties:
+#      RestApiId: !Ref GetPostApi
+#      AuthorizationType: NONE
+#      HttpMethod: GET
+#      RequestParameters:
+#        method.request.querystring.name: true
+#      Integration:
+#        Type: AWS
+#        RequestTemplates:
+#          "application/json": "{
+#              \"postId\" : $input.params('postId')
+#            }"
+
+
+  ConvertToAudioFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+       FunctionName: "sam-convert-to-audio-z"
+       CodeUri: convert_to_audio/
+       Handler: app.lambda_handler
+       Role: !GetAtt LambdaServiceRole.Arn
+       Runtime: python2.7
+       Policies: AmazonDynamoDBFullAccess
+       Timeout: 300
+       Events:
+         SNSTopic:
+           Type: SNS
+           Properties:
+             Topic:
+               Ref: SNSTopic
+       Environment:
+         Variables:
+           DB_TABLE_NAME: !Ref DynamoDBTable
+           BUCKET_NAME: !Ref S3Bucket
+
+
+  LambdaServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: "sam-role-z"
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+
+  LambdaServicePolicies:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: "sam-policy-z"
+      #PolicyName: LambdaService
+      Roles:
+      - !Ref LambdaServiceRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Action: "*"
+            Resource: "*"
+
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: "sam-dynamodb-z"
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
+
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: "sam-bucket-z"
+      PublicAccessBlockConfiguration:
+          BlockPublicAcls: false
+          BlockPublicPolicy: false
+          IgnorePublicAcls: false
+          RestrictPublicBuckets: false
+
+  S3WebBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: "sam-s3-web-z"
+      PublicAccessBlockConfiguration:
+          BlockPublicAcls: false
+          BlockPublicPolicy: false
+          IgnorePublicAcls: false
+          RestrictPublicBuckets: false
+          ## WEB
+
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: "sam-sns-z"
+      Subscription:
+        - Endpoint:
+            Fn::GetAtt:
+              - "ConvertToAudioFunction"
+              - "Arn"
+          Protocol: "lambda"
+
+Outputs:
+  Table:
+    Description: DynamoDBTable Name
+    Value: !GetAtt DynamoDBTable.Arn
+  Role:
+   Description: Role Name
+   Value: !GetAtt LambdaServiceRole.Arn
+  S3Bucket:
+   Description: S3Bucket Name
+   Value: !GetAtt S3Bucket.Arn
+#  SNSTopic:
+#   Description: SNS Topic Name
+#   Value: !GetAtt SNSTopic.Arn

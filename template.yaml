@@ -10,18 +10,18 @@ Resources:
       Role: !GetAtt LambdaServiceRole.Arn
       Runtime: python2.7
       Policies: AmazonDynamoDBFullAccess
-      Events:
-        HttpPostFuncMine:
-          Type: Api
-          Properties:
-            Path: /
-            Method: post
+#      Events:
+#        HttpPostFuncMine:
+#          Type: Api
+#          Properties:
+#            Path: /
+#            Method: post
       Environment:
         Variables:
           DB_TABLE_NAME: !Ref DynamoDBTable
           SNS_TOPIC: !Ref SNSTopic
 
-  GetPostFunction:
+  GetPostsFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: "sam-get-post-z"
@@ -30,12 +30,12 @@ Resources:
       Role: !GetAtt LambdaServiceRole.Arn
       Runtime: python2.7
       Policies: AmazonDynamoDBFullAccess
-      Events: 
-        HttpGetFuncMine:
-          Type: Api
-          Properties:
-            Path: /
-            Method: get
+#      Events:
+#        HttpGetFuncMine:
+#          Type: Api
+#          Properties:
+#            Path: /
+#            Method: get
 #      Integration: #  CORS
 #        ResponseParameters:
 #          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
@@ -43,6 +43,237 @@ Resources:
       Environment:
         Variables:
           DB_TABLE_NAME: !Ref DynamoDBTable
+
+
+  AudioPostsApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: AudioPostsApi
+      Description: API used for Getting posts
+      FailOnWarnings: true
+      EndpointConfiguration:
+        Types:
+           - REGIONAL
+
+  GetPostsPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:invokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - GetPostsFunction
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Join:
+        - ''
+        - - 'arn:aws-cn:execute-api:'
+          - Ref: AWS::Region
+          - ":"
+          - Ref: AWS::AccountId
+          - ":"
+          - Ref: AudioPostsApi
+          - "/*"
+
+  NewPostPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:invokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - NewPostFunction
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Join:
+        - ''
+        - - 'arn:aws-cn:execute-api:'
+          - Ref: AWS::Region
+          - ":"
+          - Ref: AWS::AccountId
+          - ":"
+          - Ref: AudioPostsApi
+          - "/*"
+
+  ApiGatewayCloudWatchLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - apigateway.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Policies:
+      - PolicyName: ApiGatewayLogsPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:DescribeLogGroups
+            - logs:DescribeLogStreams
+            - logs:PutLogEvents
+            - logs:GetLogEvents
+            - logs:FilterLogEvents
+            Resource: "*"
+
+  ApiGatewayAccount:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn:
+        Fn::GetAtt:
+        - ApiGatewayCloudWatchLogsRole
+        - Arn
+
+#  GetPostsStage:
+#    DependsOn:
+#    - ApiGatewayAccount
+#    Type: AWS::ApiGateway::Stage
+#    Properties:
+#      DeploymentId:
+#        Ref: GetPostsDeployment
+#      MethodSettings:
+#      - DataTraceEnabled: true
+#        HttpMethod: "*"
+#        LoggingLevel: INFO
+#        ResourcePath: "/*"
+#      RestApiId:
+#        Ref: AudioPostsApi
+#      StageName: dev
+
+  GetPostsDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+    - GetPostsRequest
+    - NewPostRequest
+    Properties:
+      RestApiId:
+        Ref: AudioPostsApi
+      StageName: prod
+
+  AudioPostsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+     RestApiId:
+       Ref: AudioPostsApi
+     ParentId:
+       Fn::GetAtt:
+       - AudioPostsApi
+       - RootResourceId
+     PathPart: audios
+
+  GetPostsRequest:
+    DependsOn: GetPostsPermission
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri:
+          Fn::Join:
+          - ''
+          - - 'arn:aws-cn:apigateway:'
+            - Ref: AWS::Region
+            - ":lambda:path/2015-03-31/functions/"
+            - Fn::GetAtt:
+              - GetPostsFunction
+              - Arn
+            - "/invocations"
+        IntegrationResponses:
+        - StatusCode: 200
+        RequestTemplates:
+          application/json:
+            Fn::Join:
+            - ''
+            - - "{"
+              - '"postId": "$input.params(''postId'')"'
+              - "}"
+        PassthroughBehavior: WHEN_NO_TEMPLATES
+      RequestParameters:
+        method.request.querystring.postId: false
+      ResourceId:
+        Ref: AudioPostsResource
+      RestApiId:
+        Ref: AudioPostsApi
+      MethodResponses:
+      - StatusCode: 200
+
+
+  GetPostsOptionRequest:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      RestApiId:
+        Ref: AudioPostsApi
+      ResourceId:
+        Ref: AudioPostsResource
+      HttpMethod: OPTIONS
+      Integration:
+        IntegrationResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+            method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+          ResponseTemplates:
+            application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        Type: MOCK
+      MethodResponses:
+      - StatusCode: 200
+        ResponseModels:
+          application/json: 'Empty'
+        ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: false
+            method.response.header.Access-Control-Allow-Methods: false
+            method.response.header.Access-Control-Allow-Origin: false
+
+  NewPostRequest:
+    DependsOn: GetPostsPermission
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri:
+          Fn::Join:
+          - ''
+          - - 'arn:aws-cn:apigateway:'
+            - Ref: AWS::Region
+            - ":lambda:path/2015-03-31/functions/"
+            - Fn::GetAtt:
+              - NewPostFunction
+              - Arn
+            - "/invocations"
+        IntegrationResponses:
+        - StatusCode: 200
+#        RequestTemplates:
+#          application/json:
+#            Fn::Join:
+#            - ''
+#            - - "{"
+#              - '"postId": "$input.params(''postId'')"'
+#              - "}"
+      RequestParameters:
+        method.request.querystring.postId: false
+      ResourceId:
+        Ref: AudioPostsResource
+      RestApiId:
+        Ref: AudioPostsApi
+      MethodResponses:
+      - StatusCode: 200
 
 
 #  NewGetApi:
@@ -67,7 +298,7 @@ Resources:
 #      Description: Get Post API
 #      Name: GetPostApi
 #
-#  GetPostFunctionMethod:
+#  GetPostsFunctionMethod:
 #    Type: "AWS::ApiGateway::Method"
 #    Properties:
 #      RestApiId: !Ref GetPostApi

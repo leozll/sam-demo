@@ -189,6 +189,10 @@ Resources:
             - "/invocations"
         IntegrationResponses:
         - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+          ResponseTemplates:
+            application/json: ''
         RequestTemplates:
           application/json:
             Fn::Join:
@@ -205,7 +209,8 @@ Resources:
         Ref: AudioPostsApi
       MethodResponses:
       - StatusCode: 200
-
+        ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: false
 
   GetPostsOptionRequest:
     Type: AWS::ApiGateway::Method
@@ -259,13 +264,10 @@ Resources:
             - "/invocations"
         IntegrationResponses:
         - StatusCode: 200
-#        RequestTemplates:
-#          application/json:
-#            Fn::Join:
-#            - ''
-#            - - "{"
-#              - '"postId": "$input.params(''postId'')"'
-#              - "}"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+          ResponseTemplates:
+            application/json: ''
       RequestParameters:
         method.request.querystring.postId: false
       ResourceId:
@@ -274,7 +276,8 @@ Resources:
         Ref: AudioPostsApi
       MethodResponses:
       - StatusCode: 200
-
+        ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: false
 
 #  NewGetApi:
 #    Type: 'AWS::ApiGateway::RestApi'

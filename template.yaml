@@ -36,10 +36,6 @@ Resources:
 #          Properties:
 #            Path: /
 #            Method: get
-#      Integration: #  CORS
-#        ResponseParameters:
-#          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
-#          gatewayresponse.header.Access-Control-Allow-Headers: "'*'"
       Environment:
         Variables:
           DB_TABLE_NAME: !Ref DynamoDBTable
@@ -130,22 +126,6 @@ Resources:
         Fn::GetAtt:
         - ApiGatewayCloudWatchLogsRole
         - Arn
-
-#  GetPostsStage:
-#    DependsOn:
-#    - ApiGatewayAccount
-#    Type: AWS::ApiGateway::Stage
-#    Properties:
-#      DeploymentId:
-#        Ref: GetPostsDeployment
-#      MethodSettings:
-#      - DataTraceEnabled: true
-#        HttpMethod: "*"
-#        LoggingLevel: INFO
-#        ResourcePath: "/*"
-#      RestApiId:
-#        Ref: AudioPostsApi
-#      StageName: dev
 
   GetPostsDeployment:
     Type: AWS::ApiGateway::Deployment
@@ -279,44 +259,6 @@ Resources:
         ResponseParameters:
             method.response.header.Access-Control-Allow-Origin: false
 
-#  NewGetApi:
-#    Type: 'AWS::ApiGateway::RestApi'
-#    Properties:
-#      Body:
-#        basePath: /
-#        Method: post
-#        schemes:
-#            - https
-#      Description: New Get API
-#      Name: NewGetApi
-#
-#  GetPostApi:
-#    Type: 'AWS::ApiGateway::RestApi'
-#    Properties:
-#      Body:
-#        basePath : /
-#        Method: get
-#        schemes :
-#            - https
-#      Description: Get Post API
-#      Name: GetPostApi
-#
-#  GetPostsFunctionMethod:
-#    Type: "AWS::ApiGateway::Method"
-#    Properties:
-#      RestApiId: !Ref GetPostApi
-#      AuthorizationType: NONE
-#      HttpMethod: GET
-#      RequestParameters:
-#        method.request.querystring.name: true
-#      Integration:
-#        Type: AWS
-#        RequestTemplates:
-#          "application/json": "{
-#              \"postId\" : $input.params('postId')
-#            }"
-
-
   ConvertToAudioFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -326,6 +268,7 @@ Resources:
        Role: !GetAtt LambdaServiceRole.Arn
        Runtime: python2.7
        Policies: AmazonDynamoDBFullAccess
+       MemorySize: 512
        Timeout: 300
        Events:
          SNSTopic:
@@ -359,7 +302,6 @@ Resources:
     Type: AWS::IAM::Policy
     Properties:
       PolicyName: "sam-policy-z"
-      #PolicyName: LambdaService
       Roles:
       - !Ref LambdaServiceRole
       PolicyDocument:
@@ -389,23 +331,50 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: "sam-bucket-z"
+      BucketName: "sam-audios-z"
       PublicAccessBlockConfiguration:
-          BlockPublicAcls: false
-          BlockPublicPolicy: false
-          IgnorePublicAcls: false
-          RestrictPublicBuckets: false
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
 
   S3WebBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: "sam-s3-web-z"
       PublicAccessBlockConfiguration:
-          BlockPublicAcls: false
-          BlockPublicPolicy: false
-          IgnorePublicAcls: false
-          RestrictPublicBuckets: false
-          ## WEB
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      WebsiteConfiguration:
+        IndexDocument: index.html
+
+  WEBBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: "S3WebBucket"
+      PolicyDocument:
+        Statement:
+          -
+            Action:
+              - "s3:GetObject"
+            Effect: "Allow"
+            Resource:
+              Fn::Join:
+                - ""
+                -
+                  - "arn:aws-cn:s3:::"
+                  -
+                    Ref: "S3WebBucket"
+                  - "/*"
+            Principal: "*"
+#            Condition:
+#              StringLike:
+#                aws:Referer:
+#                  - "http://www.example.com/*"
+#                  - "http://example.com/*"
 
   SNSTopic:
     Type: AWS::SNS::Topic
@@ -419,15 +388,21 @@ Resources:
           Protocol: "lambda"
 
 Outputs:
-  Table:
-    Description: DynamoDBTable Name
-    Value: !GetAtt DynamoDBTable.Arn
   Role:
    Description: Role Name
    Value: !GetAtt LambdaServiceRole.Arn
+  Table:
+    Description: DynamoDBTable Name
+    Value: !GetAtt DynamoDBTable.Arn
+  SNSTopic:
+    Description: SNS Topic Name
+    Value: !Ref SNSTopic
   S3Bucket:
-   Description: S3Bucket Name
+   Description: S3Bucket to store audio files
    Value: !GetAtt S3Bucket.Arn
-#  SNSTopic:
-#   Description: SNS Topic Name
-#   Value: !GetAtt SNSTopic.Arn
+  S3WebBucket:
+   Description: Static website
+   Value: !Ref S3WebBucket
+  AudioPostsApi:
+   Description: AudioPostsApi Name
+   Value: !Ref AudioPostsApi

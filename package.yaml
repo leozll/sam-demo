@@ -255,6 +255,7 @@ Resources:
         - Arn
       Runtime: python2.7
       Policies: AmazonDynamoDBFullAccess
+      MemorySize: 512
       Timeout: 300
       Events:
         SNSTopic:
@@ -312,7 +313,7 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: sam-bucket-z
+      BucketName: sam-audios-z
       PublicAccessBlockConfiguration:
         BlockPublicAcls: false
         BlockPublicPolicy: false
@@ -327,6 +328,25 @@ Resources:
         BlockPublicPolicy: false
         IgnorePublicAcls: false
         RestrictPublicBuckets: false
+      WebsiteConfiguration:
+        IndexDocument: index.html
+  WEBBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: S3WebBucket
+      PolicyDocument:
+        Statement:
+        - Action:
+          - s3:GetObject
+          Effect: Allow
+          Resource:
+            Fn::Join:
+            - ''
+            - - 'arn:aws-cn:s3:::'
+              - Ref: S3WebBucket
+              - /*
+          Principal: '*'
   SNSTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -338,21 +358,33 @@ Resources:
           - Arn
         Protocol: lambda
 Outputs:
-  Table:
-    Description: DynamoDBTable Name
-    Value:
-      Fn::GetAtt:
-      - DynamoDBTable
-      - Arn
   Role:
     Description: Role Name
     Value:
       Fn::GetAtt:
       - LambdaServiceRole
       - Arn
+  Table:
+    Description: DynamoDBTable Name
+    Value:
+      Fn::GetAtt:
+      - DynamoDBTable
+      - Arn
+  SNSTopic:
+    Description: SNS Topic Name
+    Value:
+      Ref: SNSTopic
   S3Bucket:
-    Description: S3Bucket Name
+    Description: S3Bucket to store audio files
     Value:
       Fn::GetAtt:
       - S3Bucket
       - Arn
+  S3WebBucket:
+    Description: Static website
+    Value:
+      Ref: S3WebBucket
+  AudioPostsApi:
+    Description: AudioPostsApi Name
+    Value:
+      Ref: AudioPostsApi

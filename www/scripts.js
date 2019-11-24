@@ -1,4 +1,4 @@
-var API_ENDPOINT = "https://hi7n8ifvyi.execute-api.cn-northwest-1.amazonaws.com.cn/prod/audios"
+var API_ENDPOINT = "https://APIPlaceHolder.execute-api.cn-northwest-1.amazonaws.com.cn/prod/audios"
 
 document.getElementById("sayButton").onclick = function(){
 

@@ -7,7 +7,7 @@ Resources:
       FunctionName: "sam-new-post-z"
       CodeUri: new_post/
       Handler: app.lambda_handler
-      Role: !GetAtt LambdaServiceRole.Arn
+      Role: !GetAtt ServiceRole.Arn
       Runtime: python2.7
       Policies: AmazonDynamoDBFullAccess
 #      Events:
@@ -27,7 +27,7 @@ Resources:
       FunctionName: "sam-get-post-z"
       CodeUri: get_post/
       Handler: app.lambda_handler
-      Role: !GetAtt LambdaServiceRole.Arn
+      Role: !GetAtt ServiceRole.Arn
       Runtime: python2.7
       Policies: AmazonDynamoDBFullAccess
 #      Events:
@@ -265,7 +265,7 @@ Resources:
        FunctionName: "sam-convert-to-audio-z"
        CodeUri: convert_to_audio/
        Handler: app.lambda_handler
-       Role: !GetAtt LambdaServiceRole.Arn
+       Role: !GetAtt ServiceRole.Arn
        Runtime: python2.7
        Policies: AmazonDynamoDBFullAccess
        MemorySize: 512
@@ -281,8 +281,45 @@ Resources:
            DB_TABLE_NAME: !Ref DynamoDBTable
            BUCKET_NAME: !Ref S3Bucket
 
+  BuildHostingStaticWeb:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: BuildStagingHostingStaticWeb
+      Description: Unzip zip, Upload to S3 to host Static Website
+      ServiceRole:
+        Fn::GetAtt: [ ServiceRole, Arn ]
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/ubuntu-base:14.04
+        EnvironmentVariables:
+          - Name: StaticWebBUCKET
+            Value: !Ref S3WebBucket
+          - Name: AudioPostsApi
+            Value: !Ref AudioPostsApi
+      Source:
+        Location:
+          https://github.com/XuejiaoZhang/sam-demo.git
+        Type: GITHUB
+        BuildSpec: |
+          version: 0.2
+          phases:
+            install:
+              commands:
+                - sudo apt-get upgrade
+                - curl -O https://bootstrap.pypa.io/get-pip.py
+                - python3 get-pip.py --user
+                - export PATH=~/.local/bin:$PATH
+                - pip install awscli --upgrade --user
+            build:
+              commands:
+                - sed -i -e 's/APIPlaceHolder/$AudioPostsApi/' www/scripts.js
+                - aws s3 sync www s3://$StaticWebBUCKET/ --exclude get-pip.py
+      TimeoutInMinutes: 15
+      Artifacts:
+        Type: NO_ARTIFACTS
 
-  LambdaServiceRole:
+  ServiceRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: "sam-role-z"
@@ -295,15 +332,16 @@ Resources:
             Principal:
               Service:
                 - lambda.amazonaws.com
+                - codebuild.amazonaws.com
             Action:
               - sts:AssumeRole
 
-  LambdaServicePolicies:
+  ServicePolicies:
     Type: AWS::IAM::Policy
     Properties:
       PolicyName: "sam-policy-z"
       Roles:
-      - !Ref LambdaServiceRole
+      - !Ref ServiceRole
       PolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -390,7 +428,7 @@ Resources:
 Outputs:
   Role:
    Description: Role Name
-   Value: !GetAtt LambdaServiceRole.Arn
+   Value: !GetAtt ServiceRole.Arn
   Table:
     Description: DynamoDBTable Name
     Value: !GetAtt DynamoDBTable.Arn
